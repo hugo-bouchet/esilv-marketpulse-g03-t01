@@ -26,11 +26,11 @@ def filter_prices(prices, ticker):
     return [row for row in prices if row["ticker"] == ticker]
 
 
-def get_first_close(filtered_prices):
+def get_last_close(filtered_prices):
     return float(filtered_prices[-1]["close"])
 
 
-def get_last_close(filtered_prices):
+def get_first_close(filtered_prices):
     return float(filtered_prices[0]["close"])
 
 
