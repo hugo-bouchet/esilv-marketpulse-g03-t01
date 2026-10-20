@@ -12,6 +12,13 @@ LOOKBACK_LABEL = "1 month"
 INTERVAL_LABEL = "Daily"
 
 
+def get_first_date(prices):
+    return prices[0]["date"]
+
+
+def get_last_date(prices):
+    return prices[-1]["date"]
+
 def load_instruments():
     with open(DATA_DIR / "instruments.json", encoding="utf-8") as file:
         return json.load(file)
@@ -36,24 +43,23 @@ def get_first_close(filtered_prices):
 def get_first_date(prices):
     return prices[0]["date"]
 
-
 def get_last_date(prices):
     return prices[-1]["date"]
-
-
 
 def display_market_summary(asset, prices, show_currency=True):
     ticker = asset["ticker"]
     name = asset["name"]
     observations = len(prices)
     currency = asset["currency"]
+    first_date = get_first_date(prices)
+    last_date = get_last_date(prices)
     first_close = get_first_close(prices)
     last_close = get_last_close(prices)
 
     print(ticker, "-", name)
     print("Observations :", observations)
-    print("First date :",get_first_date(prices))
-    print("Last date :",get_last_date(prices))
+    print("First date :", first_date)
+    print("Last date :", last_date)
     if show_currency:
         print("First close :", first_close, currency)
         print("Last close :", last_close, currency)
