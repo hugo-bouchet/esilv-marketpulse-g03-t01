@@ -1,4 +1,4 @@
-N.B: Nous avons travaillé à 3 sur le même ordinateur et la même branche pour ce rendu.
+N.B: Nous avions initialement travaillé à 3 sur le même ordinateur et la même branche pour ce rendu.
 
 Part 6:
 1. On the feature branch, the existing changes are marked with "+". For example (+   first_date = get_first_date(prices)).
