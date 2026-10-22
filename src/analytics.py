@@ -41,8 +41,8 @@ def calculate_period_return(prices):
 
 
 def calculate_base_100(prices):
-    raise NotImplementedError  # Owner: see team table
-
+    first_close = float(prices[0]["close"])
+    return [float(row["close"]) / first_close * 100.0 for row in prices]
 
 def calculate_relative_performance(instrument_return, benchmark_return):
-    raise NotImplementedError  # Owner: see team table
+    return instrument_return - benchmark_return
