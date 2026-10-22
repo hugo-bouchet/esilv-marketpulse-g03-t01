@@ -2,9 +2,10 @@
 
 
 def index_by_date(prices):
-    date_dict = dict(prices)
+    date_dict = {}
+    for row in prices:
+        date_dict[row["date"]] = row
     return date_dict
-    #raise NotImplementedError  # Owner: see team table
 
 
 def align_series(instrument_prices, benchmark_prices):
