@@ -2,6 +2,13 @@ from pathlib import Path
 import csv
 import json
 
+from analytics import (
+    align_series,
+    calculate_period_return,
+    calculate_base_100,
+    calculate_relative_performance,
+)
+
 
 DATA_DIR = Path("data/sample")
 
@@ -47,6 +54,8 @@ def get_first_date(prices):
 def get_last_date(prices):
     return prices[-1]["date"]
 
+
+
 def display_market_summary(asset, prices, show_currency=True):
     ticker = asset["ticker"]
     name = asset["name"]
@@ -71,6 +80,28 @@ def display_market_summary(asset, prices, show_currency=True):
         print("Last close :", last_close)
 
 
+def display_comparison(instrument, benchmark, instrument_prices, benchmark_prices):
+    aligned_instrument, aligned_benchmark = align_series(instrument_prices, benchmark_prices)
+
+    instrument_return = calculate_period_return(aligned_instrument)
+    benchmark_return = calculate_period_return(aligned_benchmark)
+    relative = calculate_relative_performance(instrument_return, benchmark_return)
+
+    instrument_base_100 = calculate_base_100(aligned_instrument)
+    benchmark_base_100 = calculate_base_100(aligned_benchmark)
+
+    instrument_ticker = instrument["ticker"]
+    benchmark_ticker = benchmark["ticker"]
+
+    print("Comparison (aligned)")
+    print(f"Aligned sessions        : {len(aligned_instrument)}")
+    print(f"{instrument_ticker} period return      : {instrument_return:+.2f}%")
+    print(f"{benchmark_ticker} period return     : {benchmark_return:+.2f}%")
+    print(f"Relative performance    : {relative:+.2f} percentage points")
+    print()
+    print("Base 100")
+    print(f"{instrument_ticker:<6} : {instrument_base_100[0]:.2f} -> {instrument_base_100[-1]:.2f}")
+    print(f"{benchmark_ticker:<6} : {benchmark_base_100[0]:.2f} -> {benchmark_base_100[-1]:.2f}")
 
 
 def main():
@@ -115,7 +146,8 @@ def main():
     print("Benchmark")
     display_market_summary(benchmark, benchmark_prices, show_currency=False)
 
-
+    print()
+    display_comparison(instrument, benchmark, instrument_prices, benchmark_prices)
 
 
 if __name__ == "__main__":
