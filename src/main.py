@@ -1,6 +1,8 @@
 from pathlib import Path
 import csv
 import json
+from providers.yahoo_provider import fetch_yahoo_prices
+PROVIDER = "yahoo"
 
 from analytics import (
     align_series,
@@ -9,6 +11,7 @@ from analytics import (
     calculate_relative_performance,
 )
 
+  
 
 DATA_DIR = Path("data/sample")
 
@@ -17,7 +20,8 @@ DATA_DIR = Path("data/sample")
 # Parsing YAML is optional and is not required by the 18-hour lab sequence.
 LOOKBACK_LABEL = "1 month"
 INTERVAL_LABEL = "Daily"
-PROVIDER_LABEL = "CSV"
+
+PROVIDER_LABEL = "Yahoo Finance" if PROVIDER == "yahoo" else "CSV"
 
 
 def get_first_date(prices):
@@ -111,9 +115,12 @@ def main():
     instrument = instruments["instrument"]
     benchmark = instruments["benchmark"]
 
-    instrument_prices = filter_prices(prices, instrument["ticker"])
-    benchmark_prices = filter_prices(prices, benchmark["ticker"])
-
+    if PROVIDER == "yahoo":
+        instrument_prices = fetch_yahoo_prices(instrument["ticker"], "1mo", "1d")
+        benchmark_prices = fetch_yahoo_prices(benchmark["ticker"], "1mo", "1d")
+    else:
+        instrument_prices = filter_prices(prices, instrument["ticker"])
+        benchmark_prices = filter_prices(prices, benchmark["ticker"])
     instrument_latest = instrument_prices[-1]
     benchmark_latest = benchmark_prices[-1]
 
