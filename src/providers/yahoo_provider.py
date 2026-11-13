@@ -1,12 +1,14 @@
 import yfinance as yf
 
-def fetch_yahoo_prices(canonical_ticker, lookback, interval ) :
-    yahoo_ticker = ""
-    if canonical_ticker == "AAPL" : 
-        yahoo_ticker = "AAPL" 
-    if canonical_ticker == "SP500" : 
-        yahoo_ticker = "^GSPC"
+CANONICAL_TO_YAHOO = {
+    "AAPL": "AAPL",
+    "SP500": "^GSPC",
+}
 
+
+
+def fetch_yahoo_prices(canonical_ticker, lookback, interval ) :
+    yahoo_ticker = CANONICAL_TO_YAHOO[canonical_ticker]
 
     raw = yf.download(yahoo_ticker, period =lookback, interval =interval)
 
