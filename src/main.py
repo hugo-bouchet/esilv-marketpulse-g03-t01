@@ -1,8 +1,6 @@
 from pathlib import Path
 import csv
 import json
-from providers.yahoo_provider import fetch_yahoo_prices
-PROVIDER = "yahoo"
 
 from analytics import (
     align_series,
@@ -10,24 +8,36 @@ from analytics import (
     calculate_base_100,
     calculate_relative_performance,
 )
+from providers.bloomberg_provider import (
+    ACCESS_MODE as BLOOMBERG_ACCESS_MODE,
+    fetch_bloomberg_prices,
+)
 
+# Active provider: "csv", "yahoo" or "bloomberg".
+PROVIDER = "bloomberg"
 
-DATA_DIR = Path("data/sample")
+DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
 
 # These starter values mirror config/settings.yml.
 # settings.yml is a human-readable configuration contract in the CORE.
 # Parsing YAML is optional and is not required by the 18-hour lab sequence.
+LOOKBACK = "1mo"
+INTERVAL = "1d"
 LOOKBACK_LABEL = "1 month"
 INTERVAL_LABEL = "Daily"
-PROVIDER_LABEL = "Yahoo Finance" if PROVIDER == "yahoo" else "CSV"
 
+PROVIDER_LABELS = {
+    "csv": "CSV",
+    "yahoo": "Yahoo Finance",
+    "bloomberg": "Bloomberg" if BLOOMBERG_ACCESS_MODE == "LIVE" else "Bloomberg stage",
+}
 
-def get_first_date(prices):
-    return prices[0]["date"]
+ACCESS_MODES = {
+    "csv": "LOCAL_FILE",
+    "yahoo": "LIVE",
+    "bloomberg": BLOOMBERG_ACCESS_MODE,
+}
 
-
-def get_last_date(prices):
-    return prices[-1]["date"]
 
 def load_instruments():
     with open(DATA_DIR / "instruments.json", encoding="utf-8") as file:
@@ -43,63 +53,112 @@ def filter_prices(prices, ticker):
     return [row for row in prices if row["ticker"] == ticker]
 
 
-def get_last_close(filtered_prices):
-    return float(filtered_prices[-1]["close"])
-
-
-def get_first_close(filtered_prices):
-    return float(filtered_prices[0]["close"])
-
 def get_first_date(prices):
     return prices[0]["date"]
+
 
 def get_last_date(prices):
     return prices[-1]["date"]
 
 
-
-def display_market_summary(asset, prices, show_currency=True):
-    ticker = asset["ticker"]
-    name = asset["name"]
-    market = asset["market"]
-    observations = len(prices)
-    currency = asset["currency"]
-    first_date = get_first_date(prices)
-    last_date = get_last_date(prices)
-    first_close = get_first_close(prices)
-    last_close = get_last_close(prices)
-
-    print(ticker, "-", name)
-    print("Market :", market)
-    print("Observations :", observations)
-    print("First date :", first_date)
-    print("Last date :", last_date)
-    if show_currency:
-        print("First close :", first_close, currency)
-        print("Last close :", last_close, currency)
-    else:
-        print("First close :", first_close)
-        print("Last close :", last_close)
+def get_first_close(prices):
+    return float(prices[0]["close"])
 
 
-def display_comparison(instrument, benchmark, instrument_prices, benchmark_prices):
-    aligned_instrument, aligned_benchmark = align_series(instrument_prices, benchmark_prices)
+def get_last_close(prices):
+    return float(prices[-1]["close"])
+
+
+def get_provider_rows(provider, instrument_ticker, benchmark_ticker):
+    if provider == "bloomberg":
+        return (
+            fetch_bloomberg_prices(instrument_ticker),
+            fetch_bloomberg_prices(benchmark_ticker),
+        )
+
+    if provider == "yahoo":
+        # Imported here so that the other providers work without yfinance.
+        from providers.yahoo_provider import fetch_yahoo_prices
+
+        return (
+            fetch_yahoo_prices(instrument_ticker, LOOKBACK, INTERVAL),
+            fetch_yahoo_prices(benchmark_ticker, LOOKBACK, INTERVAL),
+        )
+
+    prices = load_prices()
+    return (
+        filter_prices(prices, instrument_ticker),
+        filter_prices(prices, benchmark_ticker),
+    )
+
+
+def build_market_snapshot(provider=PROVIDER):
+    """Shared application result for terminal (TD10) and Dash (TD11)."""
+    instruments = load_instruments()
+    instrument = instruments["instrument"]
+    benchmark = instruments["benchmark"]
+
+    instrument_prices, benchmark_prices = get_provider_rows(
+        provider, instrument["ticker"], benchmark["ticker"]
+    )
+
+    if not instrument_prices or not benchmark_prices:
+        raise ValueError("Provider returned empty rows.")
+
+    aligned_instrument, aligned_benchmark = align_series(
+        instrument_prices,
+        benchmark_prices,
+    )
+
+    if not aligned_instrument:
+        raise ValueError("No common dates between instrument and benchmark.")
 
     instrument_return = calculate_period_return(aligned_instrument)
     benchmark_return = calculate_period_return(aligned_benchmark)
-    relative = calculate_relative_performance(instrument_return, benchmark_return)
 
-    instrument_base_100 = calculate_base_100(aligned_instrument)
-    benchmark_base_100 = calculate_base_100(aligned_benchmark)
+    return {
+        "provider": PROVIDER_LABELS[provider],
+        "access_mode": ACCESS_MODES[provider],
+        "lookback": LOOKBACK_LABEL,
+        "interval": INTERVAL_LABEL,
+        "instrument": instrument,
+        "benchmark": benchmark,
+        "instrument_prices": instrument_prices,
+        "benchmark_prices": benchmark_prices,
+        "dates": [row["date"] for row in aligned_instrument],
+        "instrument_return": instrument_return,
+        "benchmark_return": benchmark_return,
+        "relative_performance": calculate_relative_performance(
+            instrument_return, benchmark_return
+        ),
+        "instrument_base_100": calculate_base_100(aligned_instrument),
+        "benchmark_base_100": calculate_base_100(aligned_benchmark),
+    }
 
-    instrument_ticker = instrument["ticker"]
-    benchmark_ticker = benchmark["ticker"]
+
+def display_market_summary(asset, prices, show_currency=True):
+    currency = asset["currency"] if show_currency else ""
+
+    print(asset["ticker"], "-", asset["name"])
+    print("Market       :", asset["market"])
+    print("Observations :", len(prices))
+    print("First date   :", get_first_date(prices))
+    print("Last date    :", get_last_date(prices))
+    print("First close  :", get_first_close(prices), currency)
+    print("Last close   :", get_last_close(prices), currency)
+
+
+def display_comparison(snapshot):
+    instrument_ticker = snapshot["instrument"]["ticker"]
+    benchmark_ticker = snapshot["benchmark"]["ticker"]
+    instrument_base_100 = snapshot["instrument_base_100"]
+    benchmark_base_100 = snapshot["benchmark_base_100"]
 
     print("Comparison (aligned)")
-    print(f"Aligned sessions        : {len(aligned_instrument)}")
-    print(f"{instrument_ticker} period return      : {instrument_return:+.2f}%")
-    print(f"{benchmark_ticker} period return     : {benchmark_return:+.2f}%")
-    print(f"Relative performance    : {relative:+.2f} percentage points")
+    print(f"Aligned sessions        : {len(snapshot['dates'])}")
+    print(f"{instrument_ticker} period return      : {snapshot['instrument_return']:+.2f}%")
+    print(f"{benchmark_ticker} period return     : {snapshot['benchmark_return']:+.2f}%")
+    print(f"Relative performance    : {snapshot['relative_performance']:+.2f} percentage points")
     print()
     print("Base 100")
     print(f"{instrument_ticker:<6} : {instrument_base_100[0]:.2f} -> {instrument_base_100[-1]:.2f}")
@@ -107,53 +166,31 @@ def display_comparison(instrument, benchmark, instrument_prices, benchmark_price
 
 
 def main():
-    instruments = load_instruments()
-    prices = load_prices()
-
-    instrument = instruments["instrument"]
-    benchmark = instruments["benchmark"]
-
-    if PROVIDER == "yahoo":
-        instrument_prices = fetch_yahoo_prices(instrument["ticker"], "1mo", "1d")
-        benchmark_prices = fetch_yahoo_prices(benchmark["ticker"], "1mo", "1d")
-    else:
-        instrument_prices = filter_prices(prices, instrument["ticker"])
-        benchmark_prices = filter_prices(prices, benchmark["ticker"])
-
-    instrument_latest = instrument_prices[-1]
-    benchmark_latest = benchmark_prices[-1]
+    snapshot = build_market_snapshot(PROVIDER)
+    instrument = snapshot["instrument"]
+    benchmark = snapshot["benchmark"]
 
     print("=== MarketPulse ===")
     print()
-
-    print("Provider:", PROVIDER_LABEL)
+    print("Provider")
+    print(snapshot["provider"])
     print()
-
-    #print("Instrument")
-    #print(f"{instrument['ticker']} - {instrument['name']}")
-    #print(f"Last price: {instrument_latest['close']} {instrument['currency']}")
-    #print()
-    #print("Benchmark")
-    #print(f"{benchmark['ticker']} - {benchmark['name']}")
-    #print(f"Last level: {benchmark_latest['close']}")
-    #print()
-    #print(f"Period: {LOOKBACK_LABEL}")
-    #print(f"Interval: {INTERVAL_LABEL}")
-    #print()
-    #print("Observations")
-    #print(f"{instrument['ticker']}: {len(instrument_prices)}")
-    #print(f"{benchmark['ticker']}: {len(benchmark_prices)}")
-
+    print("Access mode")
+    print(snapshot["access_mode"])
+    print()
+    print(f"Instrument : {instrument['ticker']} - {instrument['name']}")
+    print(f"Benchmark  : {benchmark['name']}")
+    print(f"Period     : {snapshot['lookback']}")
+    print(f"Interval   : {snapshot['interval']}")
+    print()
 
     print("Instrument")
-    display_market_summary(instrument, instrument_prices)
-
+    display_market_summary(instrument, snapshot["instrument_prices"])
     print()
     print("Benchmark")
-    display_market_summary(benchmark, benchmark_prices, show_currency=False)
-
+    display_market_summary(benchmark, snapshot["benchmark_prices"], show_currency=False)
     print()
-    display_comparison(instrument, benchmark, instrument_prices, benchmark_prices)
+    display_comparison(snapshot)
 
 
 if __name__ == "__main__":
